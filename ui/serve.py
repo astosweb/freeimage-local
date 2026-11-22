@@ -108,6 +108,8 @@ if __name__ == "__main__":
     ap.add_argument("--host", default="0.0.0.0")
     a = ap.parse_args()
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
+    # Flush so headless / nohup / systemd journals show we're up.
+    print(f"freeimage UI ready on http://{a.host}:{a.port}", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

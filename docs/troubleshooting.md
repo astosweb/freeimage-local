@@ -26,5 +26,13 @@ Force weight offloading: `FI_OFFLOAD=1 ./fi serve`. It's already on automaticall
 **Port already in use**
 `FI_SD_PORT=7870 FI_UI_PORT=7871 ./fi serve`
 
+**Ubuntu / headless server — `./fi serve` “shows nothing”**
+There is no desktop browser on the server. The UI listens on `0.0.0.0:7861`; open it from your laptop:
+
+- Network URL printed at startup (`http://<server-ip>:7861`), after opening the port in `ufw` / the cloud security group, or
+- SSH tunnel (no firewall change): `ssh -L 7861:127.0.0.1:7861 user@server` then open `http://127.0.0.1:7861` locally.
+
+`localhost` on the server is not your laptop. The diffusion engine stays on `127.0.0.1:7860` on purpose; only the UI port needs to be reachable.
+
 **Logs**
 `.fi/build.log` (build), `.fi/server.log` (engine), `.fi/last.log` (last single image).
