@@ -21,7 +21,16 @@ detect_platform() {
   FI_PLATFORM=none; FI_DEVICE="no supported GPU"; FI_CUDA_ARCH=0; FI_VRAM_MB=0
   if [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ]; then
     FI_PLATFORM=metal
-    FI_DEVICE="$(sysctl -n machdep.cpu.brand_string 2>/dev/null), $(( $(sysctl -n hw.memsize) / 1073741824 )) GB unified memory"
+    # sysctl can fail under sandbox/TCC; never let empty memsize blow up $(( )).
+    local brand mem_bytes mem_label
+    brand="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'Apple Silicon')"
+    mem_bytes="$(sysctl -n hw.memsize 2>/dev/null || true)"
+    if [ -n "$mem_bytes" ]; then
+      mem_label="$(( mem_bytes / 1073741824 )) GB unified memory"
+    else
+      mem_label="unified memory"
+    fi
+    FI_DEVICE="$brand, $mem_label"
   elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
     FI_PLATFORM=cuda
     local q; q="$(nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader,nounits | head -1)"
