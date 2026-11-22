@@ -67,14 +67,17 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def send(self, code: int, body: bytes, ctype: str, extra: dict | None = None):
-        self.send_response(code)
-        self.send_header("content-type", ctype)
-        self.send_header("content-length", str(len(body)))
-        self.send_header("cache-control", "no-store")
-        for k, v in (extra or {}).items():
-            self.send_header(k, v)
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("content-type", ctype)
+            self.send_header("content-length", str(len(body)))
+            self.send_header("cache-control", "no-store")
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # client closed the tab / refreshed mid-response
 
     def json(self, code: int, obj):
         self.send(code, json.dumps(obj).encode(), "application/json")
@@ -96,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0)) or 0) or b"{}")
             self.json(200, generate(body))
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # browser gone; image may still have been saved
         except ValueError as e:
             self.json(400, {"error": str(e)})
         except Exception as e:  # engine down, timeout…
