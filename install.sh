@@ -5,6 +5,9 @@
 #   ./install.sh            build + download everything
 #   ./install.sh --build    only (re)build the engine
 #   ./install.sh --models   only download / verify the models
+#
+# Set HF_TOKEN to authenticate Hugging Face downloads (rate limits / gated repos):
+#   HF_TOKEN=hf_xxx ./install.sh --models
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -102,6 +105,11 @@ download_models() {
   step "Downloading models ($(human "$total"), resumable)"
   need curl "Install curl first."
   mkdir -p "$FI_HOME/models"
+  local auth=()
+  if [ -n "${HF_TOKEN:-}" ]; then
+    auth=(-H "Authorization: Bearer ${HF_TOKEN}")
+    info "using HF_TOKEN for Hugging Face downloads"
+  fi
   local name url sha bytes file
   for entry in "${MODELS[@]}"; do
     IFS='|' read -r name url sha bytes <<<"$entry"
@@ -110,7 +118,7 @@ download_models() {
       info "$name: already downloaded"
     else
       info "$name: $(basename "$url") ($(human "$bytes"))"
-      curl -fL --retry 5 --retry-delay 3 -C - --progress-bar -o "$file" "$url" \
+      curl -fL --retry 5 --retry-delay 3 -C - --progress-bar "${auth[@]}" -o "$file" "$url" \
         || die "download failed for $name. Run ./install.sh --models again to resume."
     fi
     if [ "${FI_SKIP_VERIFY:-0}" != 1 ]; then

@@ -15,6 +15,9 @@ The installer picks the newest `g++-14/13/12` it finds automatically.
 **A download stopped halfway**
 Run `./install.sh --models` again. Downloads resume where they left off and are checked against SHA-256.
 
+**Hugging Face rate limit / 401 / 403 on model download**
+Pass a token: `HF_TOKEN=hf_xxx ./install.sh --models`. Create one at https://huggingface.co/settings/tokens.
+
 **Out of memory on NVIDIA**
 Force weight offloading: `FI_OFFLOAD=1 ./fi serve`. It's already on automatically for cards under 12 GB.
 

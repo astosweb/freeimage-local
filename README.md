@@ -89,6 +89,7 @@ The installer:
 1. detects your GPU (Metal, or CUDA with the right `sm_XX` architecture),
 2. builds a pinned, tested version of [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp),
 3. downloads the three model files with resume support and checks their SHA-256.
+   If Hugging Face rate-limits you, set `HF_TOKEN` (from [settings/tokens](https://huggingface.co/settings/tokens)): `HF_TOKEN=hf_xxx ./install.sh --models`.
 
 Everything lives in `.fi/` inside this folder. Delete it to uninstall.
 
