@@ -118,7 +118,7 @@ download_models() {
       info "$name: already downloaded"
     else
       info "$name: $(basename "$url") ($(human "$bytes"))"
-      curl -fL --retry 5 --retry-delay 3 -C - --progress-bar "${auth[@]}" -o "$file" "$url" \
+      curl -fL --retry 5 --retry-delay 3 -C - --progress-bar "${auth[@]+"${auth[@]}"}" -o "$file" "$url" \
         || die "download failed for $name. Run ./install.sh --models again to resume."
     fi
     if [ "${FI_SKIP_VERIFY:-0}" != 1 ]; then

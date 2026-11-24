@@ -9,7 +9,7 @@
 #
 # Options for single images:
 #   --size WxH     default 1024x1024 (multiples of 64)
-#   --steps N      default 8 (6 is faster with a little less detail)
+#   --steps N      default 8, 6 on Macs with ≤18 GB (6 is faster with a little less detail)
 #   --seed N       default random
 #   -o FILE        output path (default outputs/<time>.png)
 set -euo pipefail
@@ -27,7 +27,7 @@ start_engine() {
   engine_args
   if curl -sf "http://127.0.0.1:$SD_PORT/sdapi/v1/sd-models" >/dev/null 2>&1; then return; fi
   info "loading the model (first start takes a moment)…"
-  "$FI_HOME/bin/sd-server" --listen-ip 127.0.0.1 --listen-port "$SD_PORT" "${FI_ARGS[@]}" --steps 8 \
+  "$FI_HOME/bin/sd-server" --listen-ip 127.0.0.1 --listen-port "$SD_PORT" "${FI_ARGS[@]}" --steps "$FI_STEPS" \
     >"$FI_HOME/server.log" 2>&1 &
   SD_PID=$!
   trap 'kill $SD_PID 2>/dev/null || true' EXIT INT TERM
@@ -40,7 +40,7 @@ start_engine() {
 }
 
 cmd_generate() {
-  local prompt="" size=1024x1024 steps=8 seed=-1 out=""
+  local prompt="" size=1024x1024 steps="" seed=-1 out=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --size) size="$2"; shift 2 ;;
@@ -54,6 +54,7 @@ cmd_generate() {
   [ -n "$prompt" ] || { usage; exit 1; }
   require_install
   engine_args
+  steps="${steps:-$FI_STEPS}"
   local w="${size%x*}" h="${size#*x}"
   mkdir -p "$ROOT/outputs"
   out="${out:-$ROOT/outputs/$(date +%Y%m%d-%H%M%S).png}"
@@ -85,7 +86,7 @@ cmd_serve() {
   start_engine
   ok "engine ready ($FI_DEVICE)"
   serve_urls
-  FI_SD_URL="http://127.0.0.1:$SD_PORT" FI_OUT="$ROOT/outputs" \
+  FI_SD_URL="http://127.0.0.1:$SD_PORT" FI_OUT="$ROOT/outputs" FI_STEPS="$FI_STEPS" \
     python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-0.0.0.0}" --port "$UI_PORT"
 }
 
@@ -127,6 +128,7 @@ cmd_doctor() {
   local llm; llm="$(select_llm "$FI_HOME/models")"
   echo "models   : $([ -f "$FI_HOME/models/z_image_turbo_int8_convrot.safetensors" ] && echo present || echo 'missing (./install.sh --models)')"
   echo "llm      : $(basename "$llm")$([ -f "$llm" ] || echo ' (missing — ./install.sh --models)')"
+  echo "steps    : $FI_STEPS"
   echo "flags    : ${FI_ARGS[*]##*/}"
 }
 

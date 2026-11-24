@@ -22,6 +22,7 @@ OUT = Path(os.environ.get("FI_OUT", HERE.parent / "outputs"))
 OUT.mkdir(parents=True, exist_ok=True)
 GPU = threading.Lock()  # one image at a time; the GPU is the bottleneck anyway
 NAME = re.compile(r"^[\w.-]+\.png$")
+DEFAULT_STEPS = int(os.environ.get("FI_STEPS", 8))
 
 
 def generate(body: dict) -> dict:
@@ -31,7 +32,7 @@ def generate(body: dict) -> dict:
     w, h = int(body.get("width", 1024)), int(body.get("height", 1024))
     if not (256 <= w <= 2048 and 256 <= h <= 2048 and w % 64 == 0 and h % 64 == 0):
         raise ValueError("Width and height must be multiples of 64 between 256 and 2048.")
-    steps = max(1, min(int(body.get("steps", 8)), 30))
+    steps = max(1, min(int(body.get("steps", DEFAULT_STEPS)), 30))
     seed = body.get("seed")
     seed = int(seed) if str(seed or "").isdigit() else random.randint(0, 2**31 - 1)
     req = json.dumps({"prompt": prompt, "width": w, "height": h, "steps": steps,
@@ -82,7 +83,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/":
-            return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            page = (HERE / "index.html").read_text()
+            if DEFAULT_STEPS == 6:
+                page = page.replace('data-v="8" aria-pressed="true"', 'data-v="8" aria-pressed="false"') \
+                           .replace('data-v="6" aria-pressed="false"', 'data-v="6" aria-pressed="true"')
+            return self.send(200, page.encode(), "text/html; charset=utf-8")
         if path == "/api/history":
             return self.json(200, history())
         if path.startswith("/outputs/") and NAME.match(path[9:]) and (OUT / path[9:]).is_file():

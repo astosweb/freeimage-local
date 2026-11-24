@@ -91,11 +91,17 @@ engine_args() {
       FI_ARGS+=(--params-backend "te=cpu,vae=cpu")
       # Leave headroom inside Apple's recommended working set for activations.
       FI_ARGS+=(--max-vram 10)
+      # Full-frame VAE decode OOMs at 1024² and falls back to 512² tiles at 50% overlap (~30 s).
+      # Wide tiles with small overlap decode the same image in ~20 s.
+      FI_ARGS+=(--vae-tiling --vae-tile-size 1024x512 --vae-tile-overlap 0.125)
+      # Sampling is ~30 s/step at 1024² on a base M4 GPU; 6 steps saves ~60 s per image.
+      FI_STEPS="${FI_STEPS:-6}"
     fi
     # Auto probe often leaves flash-attn off on Metal after a weak micro-bench;
     # force it for the diffusion model (TE stays on CPU above).
     FI_ARGS+=(--flash-attn "diffusion=on")
   fi
+  FI_STEPS="${FI_STEPS:-8}"
 }
 
 require_install() {
