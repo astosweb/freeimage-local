@@ -23,6 +23,9 @@ Force weight offloading: `FI_OFFLOAD=1 ./fi serve`. It's already on automaticall
 - Laptop? Check temperature with `nvidia-smi`. Around 87 °C the GPU throttles itself.
 - Close other apps that use the GPU (browsers with hardware acceleration, games).
 
+**Apple Silicon is much slower than a 6 GB NVIDIA card**
+Expected: CUDA + SageAttention is the fast path; Metal has no SageAttention. On a 16 GB Mac the old default also spilled the text encoder to disk and graph-cut every step (~25 s/it). `./fi doctor` should show Metal flags like `--mmap`, `--backend diffusion=MTL0,te=cpu,…`, and `Qwen3-4B-Q4_K_M.gguf`. If you still have only the Q8 encoder, run `./install.sh --models`. Do **not** set `FI_OFFLOAD=1` on Mac — unified memory makes CPU offload slower and hungrier.
+
 **Port already in use**
 `FI_SD_PORT=7870 FI_UI_PORT=7871 ./fi serve`
 

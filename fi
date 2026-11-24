@@ -121,9 +121,12 @@ cmd_doctor() {
   echo "platform : $FI_PLATFORM"
   echo "device   : $FI_DEVICE"
   [ "$FI_PLATFORM" = cuda ] && echo "arch     : sm_$FI_CUDA_ARCH"
+  [ "$FI_PLATFORM" = metal ] && [ "${FI_UNIFIED_GB:-0}" -gt 0 ] && echo "unified  : ${FI_UNIFIED_GB} GB"
   echo "home     : $FI_HOME"
   echo "engine   : $([ -x "$FI_HOME/bin/sd-cli" ] && echo built || echo 'not built (./install.sh)')"
+  local llm; llm="$(select_llm "$FI_HOME/models")"
   echo "models   : $([ -f "$FI_HOME/models/z_image_turbo_int8_convrot.safetensors" ] && echo present || echo 'missing (./install.sh --models)')"
+  echo "llm      : $(basename "$llm")$([ -f "$llm" ] || echo ' (missing — ./install.sh --models)')"
   echo "flags    : ${FI_ARGS[*]##*/}"
 }
 

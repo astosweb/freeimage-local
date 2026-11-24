@@ -80,6 +80,17 @@ A stand that lifts the back of the laptop helps more than any flag.
 - Few-step distill LoRAs (2–4 steps) and SVDQuant int4.
 - Generating at 768² and upscaling.
 
+## Apple Silicon notes
+
+Metal has no SageAttention. On ≤18 GB unified memory, freeimage-local:
+
+- downloads `Qwen3-4B-Q4_K_M.gguf` instead of Q8 (saves ~1.8 GB),
+- runs text encoding on CPU and keeps the DiT on `MTL0`,
+- enables `--mmap` and diffusion flash-attention,
+- never uses `--offload-to-cpu` (harmful on unified memory).
+
+That stops the text encoder from spilling to disk and the DiT from graph-cutting every step. It will still be slower than an RTX 3060 — share `./fi bench` if you measure a Mac.
+
 ## Add your machine
 
 ```bash

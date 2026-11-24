@@ -16,11 +16,23 @@ SDCPP_REPO="https://github.com/leejet/stable-diffusion.cpp.git"
 SDCPP_REF="${SDCPP_REF:-532d2c15c430a785a712b2d94281f04e733008a4}"
 
 # name | url | sha256 | bytes
-MODELS=(
+MODELS_COMMON=(
   "diffusion|https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors|be517ebd47c912a5626a588e1aeea43e6be4a43c0cdcd2b48a2a780d9f358635|6201001296"
-  "text-encoder|https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q8_0.gguf|eed555233267a33c7e8ee31682762cc7751b3f6d224039086e0e846f05fffa5d|4280405792"
   "vae|https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/vae/ae.safetensors|afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38|335304388"
 )
+# CUDA (and Metal 24 GB+) keep the Q8 text encoder. Metal ≤18 GB uses Q4 so DiT fits.
+MODEL_TE_Q8="text-encoder|https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q8_0.gguf|eed555233267a33c7e8ee31682762cc7751b3f6d224039086e0e846f05fffa5d|4280405792"
+MODEL_TE_Q4="text-encoder|https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf|f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a|2497281312"
+
+model_list() {
+  detect_platform
+  MODELS=("${MODELS_COMMON[@]}")
+  if [ "$FI_PLATFORM" = metal ] && [ "${FI_UNIFIED_GB:-0}" -gt 0 ] && [ "$FI_UNIFIED_GB" -le 18 ]; then
+    MODELS+=("$MODEL_TE_Q4")
+  else
+    MODELS+=("$MODEL_TE_Q8")
+  fi
+}
 
 need() { command -v "$1" >/dev/null 2>&1 || die "missing '$1'. $2"; }
 
@@ -81,10 +93,16 @@ build_engine() {
 }
 
 download_models() {
-  step "Downloading models (~10.8 GB, resumable)"
+  model_list
+  local total=0 entry
+  for entry in "${MODELS[@]}"; do
+    IFS='|' read -r _ _ _ bytes <<<"$entry"
+    total=$(( total + bytes ))
+  done
+  step "Downloading models ($(human "$total"), resumable)"
   need curl "Install curl first."
   mkdir -p "$FI_HOME/models"
-  local entry name url sha bytes file
+  local name url sha bytes file
   for entry in "${MODELS[@]}"; do
     IFS='|' read -r name url sha bytes <<<"$entry"
     file="$FI_HOME/models/$(basename "$url")"

@@ -62,12 +62,12 @@ Why it works:
 | NVIDIA RTX 40-series, Linux | Should work | Same code path, architecture detected automatically. |
 | NVIDIA RTX 50-series (5060, 5070…), Linux | Should work | Needs CUDA 12.8+ for `sm_120`. The installer checks this. |
 | Windows + NVIDIA | Should work in WSL2 | Use the Linux steps inside WSL2 with the NVIDIA CUDA-on-WSL driver. |
-| Apple Silicon Mac | Should work | Metal build. No SageAttention, so the gain comes from int8 alone. Unified memory, no offload needed. |
+| Apple Silicon Mac | ✅ Tuned | Metal build. No SageAttention. On ≤18 GB unified memory, installs a Q4 text encoder and pins DiT on GPU (TE on CPU) so sampling does not thrash. Never use `--offload-to-cpu` on Mac. |
 
-Only the first row has been measured. **If you run it on something else, please share `./fi bench` output in an issue**,
+Only the NVIDIA row has full quality benches. **If you run it on something else, please share `./fi bench` output in an issue**,
 and I'll add your numbers to this table.
 
-You need about 11 GB of free disk, 16 GB of RAM, and for NVIDIA cards with less than 12 GB of VRAM the weights are offloaded automatically.
+You need about 9–11 GB of free disk (Metal ≤18 GB downloads the smaller Q4 text encoder), 16 GB of RAM, and for NVIDIA cards with less than 12 GB of VRAM the weights are offloaded automatically.
 
 ## Install
 
