@@ -123,6 +123,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self.json(400, {"error": str(e)})
         except Exception as e:  # engine down, timeout…
+            if isinstance(getattr(e, "reason", None), ConnectionRefusedError):
+                return self.json(503, {"error": "Engine stopped (crashed) and is restarting — the reason is in "
+                                                "the ./fi serve terminal. Try again in 1–3 min."})
             self.json(502, {"error": f"Engine error: {e}"})
 
 

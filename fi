@@ -55,7 +55,8 @@ start_engine() {
   # Mirror new log lines to this terminal so a cloud shell is not a blank wait.
   tail -n 0 -F "$FI_HOME/server.log" 2>/dev/null &
   TAIL_PID=$!
-  trap 'kill $SD_PID $TAIL_PID 2>/dev/null || true' EXIT INT TERM
+  trap 'kill $SD_PID $TAIL_PID ${UI_PID:-} 2>/dev/null || true' EXIT
+  trap 'exit 130' INT TERM
   local i=0
   until sd_up; do
     if ! kill -0 "$SD_PID" 2>/dev/null; then
@@ -182,7 +183,9 @@ cmd_serve() {
   ok "engine ready ($FI_DEVICE)"
   if [ "$FI_PLATFORM" = cuda ]; then
     # First request pays lazy CUDA kernel loading + graph capture; pay it before the user does.
-    (post_txt2img "warm up" 1024 1024 1 >/dev/null 2>&1 || true) &
+    # Synchronous so it never overlaps a UI request (that bypasses serve.py's GPU lock).
+    info "warming up CUDA kernels…"
+    post_txt2img "warm up" 1024 1024 1 >/dev/null 2>&1 || true
   fi
   vast_bind_ui_port
   serve_urls
@@ -194,7 +197,21 @@ cmd_serve() {
   # Restrict with FI_UI_HOST=127.0.0.1 if you only want loopback.
   FI_SD_URL="http://127.0.0.1:$SD_PORT" FI_OUT="$ROOT/outputs" FI_STEPS="$FI_STEPS" \
     FI_MEM_GB="$mem_gb" \
-    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-0.0.0.0}" --port "$UI_PORT"
+    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-0.0.0.0}" --port "$UI_PORT" &
+  UI_PID=$!
+  # sd-server can die mid-session (CUDA error, OOM kill). Show why and bring it back.
+  while kill -0 "$UI_PID" 2>/dev/null; do
+    if [ -n "${SD_PID:-}" ] && ! kill -0 "$SD_PID" 2>/dev/null; then
+      cp "$FI_HOME/server.log" "$FI_HOME/server.crash.log"
+      printf '\n%s✗ engine stopped — last log lines (full: %s)%s\n' "$R" "$FI_HOME/server.crash.log" "$N" >&2
+      tail -25 "$FI_HOME/server.crash.log" >&2
+      dmesg 2>/dev/null | grep -iE 'killed process|out of memory|NVRM|Xid' | tail -5 >&2 || true
+      info "restarting engine…"
+      start_engine
+      ok "engine restarted"
+    fi
+    sleep 2
+  done
 }
 
 cmd_bench() {
