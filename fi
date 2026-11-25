@@ -102,8 +102,11 @@ cmd_generate() {
   mkdir -p "$ROOT/outputs"
   out="${out:-$ROOT/outputs/$(date +%Y%m%d-%H%M%S).png}"
   info "$FI_DEVICE · ${w}×${h} · $steps steps"
+  # Full-frame VAE decode at 2048² overflows ggml-cuda's uint32 element limit (GGML_ASSERT abort).
+  local tiling=()
+  [ $((w * h)) -gt $((1536 * 1536)) ] && tiling=(--vae-tiling --vae-tile-size 1024x1024 --vae-tile-overlap 0.125)
   local t0=$SECONDS
-  "$FI_HOME/bin/sd-cli" "${FI_ARGS[@]}" -p "$prompt" -W "$w" -H "$h" --steps "$steps" -s "$seed" -o "$out" \
+  "$FI_HOME/bin/sd-cli" "${FI_ARGS[@]}" ${tiling[@]+"${tiling[@]}"} -p "$prompt" -W "$w" -H "$h" --steps "$steps" -s "$seed" -o "$out" \
     >"$FI_HOME/last.log" 2>&1 || { tail -20 "$FI_HOME/last.log"; die "generation failed. Log: $FI_HOME/last.log"; }
   ok "$out  ($((SECONDS - t0)) s incl. model load — use 'fi serve' to keep it loaded)"
 }

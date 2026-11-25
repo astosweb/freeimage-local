@@ -42,7 +42,12 @@ def generate(body: dict) -> dict:
     steps = max(1, min(int(body.get("steps", DEFAULT_STEPS)), 30))
     seed = body.get("seed")
     seed = int(seed) if str(seed or "").isdigit() else random.randint(0, 2**31 - 1)
-    req = json.dumps({"prompt": prompt, "width": w, "height": h, "steps": steps,
+    engine_prompt = prompt
+    # Full-frame VAE attention is (w/8 · h/8)² elements; at 2048² that hits ggml-cuda's uint32 limit and aborts.
+    if w * h > 1536 * 1536:
+        engine_prompt += ('<sd_cpp_extra_args>{"vae_tiling_params": {"enabled": true, "tile_size_w": 1024, '
+                          '"tile_size_h": 1024, "target_overlap": 0.125}}</sd_cpp_extra_args>')
+    req = json.dumps({"prompt": engine_prompt, "width": w, "height": h, "steps": steps,
                       "cfg_scale": 1.0, "seed": seed}).encode()
     with GPU:
         t0 = time.time()
