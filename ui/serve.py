@@ -23,6 +23,10 @@ OUT.mkdir(parents=True, exist_ok=True)
 GPU = threading.Lock()  # one image at a time; the GPU is the bottleneck anyway
 NAME = re.compile(r"^[\w.-]+\.png$")
 DEFAULT_STEPS = int(os.environ.get("FI_STEPS", 8))
+# VRAM / unified memory in GiB (from `fi serve`). 24+ unlocks 2048² in the UI.
+MEM_GB = int(os.environ.get("FI_MEM_GB", "0") or "0")
+HIGH_RES = MEM_GB >= 24 or os.environ.get("FI_HIGH_RES", "") == "1"
+MAX_SIDE = 2048 if HIGH_RES else 1344
 
 
 def generate(body: dict) -> dict:
@@ -30,8 +34,11 @@ def generate(body: dict) -> dict:
     if not prompt:
         raise ValueError("Write a prompt first.")
     w, h = int(body.get("width", 1024)), int(body.get("height", 1024))
-    if not (256 <= w <= 2048 and 256 <= h <= 2048 and w % 64 == 0 and h % 64 == 0):
-        raise ValueError("Width and height must be multiples of 64 between 256 and 2048.")
+    if not (256 <= w <= MAX_SIDE and 256 <= h <= MAX_SIDE and w % 64 == 0 and h % 64 == 0):
+        raise ValueError(
+            f"Width and height must be multiples of 64 between 256 and {MAX_SIDE}."
+            + ("" if HIGH_RES else " (2048² needs 24 GB+ VRAM/unified memory)")
+        )
     steps = max(1, min(int(body.get("steps", DEFAULT_STEPS)), 30))
     seed = body.get("seed")
     seed = int(seed) if str(seed or "").isdigit() else random.randint(0, 2**31 - 1)
@@ -87,7 +94,12 @@ class Handler(BaseHTTPRequestHandler):
             if DEFAULT_STEPS == 6:
                 page = page.replace('data-v="8" aria-pressed="true"', 'data-v="8" aria-pressed="false"') \
                            .replace('data-v="6" aria-pressed="false"', 'data-v="6" aria-pressed="true"')
+            if HIGH_RES:
+                page = page.replace(" data-hires hidden", "")
             return self.send(200, page.encode(), "text/html; charset=utf-8")
+        if path == "/api/config":
+            return self.json(200, {"mem_gb": MEM_GB, "high_res": HIGH_RES, "max_side": MAX_SIDE,
+                                   "steps": DEFAULT_STEPS})
         if path == "/api/history":
             return self.json(200, history())
         if path.startswith("/outputs/") and NAME.match(path[9:]) and (OUT / path[9:]).is_file():
@@ -110,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7861)
-    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--host", default="127.0.0.1")
     a = ap.parse_args()
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     # Flush so headless / nohup / systemd journals show we're up.

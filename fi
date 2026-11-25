@@ -3,7 +3,7 @@
 #
 #   fi "a red fox in fresh snow"          make one image → outputs/
 #   fi "..." --size 768x1344 --seed 7     portrait, fixed seed
-#   fi serve                              web UI on :7861 (prints LAN URL / SSH tip)
+#   fi serve                              web UI on http://127.0.0.1:7861
 #   fi bench                              measure seconds per image on this machine
 #   fi doctor                             show what was detected and which flags are used
 #
@@ -65,20 +65,9 @@ cmd_generate() {
   ok "$out  ($((SECONDS - t0)) s incl. model load — use 'fi serve' to keep it loaded)"
 }
 
-# Print URLs that actually work from this machine / a remote browser.
 serve_urls() {
-  info "UI listening on 0.0.0.0:$UI_PORT (engine stays on 127.0.0.1:$SD_PORT)"
-  ok "on this host:  http://127.0.0.1:$UI_PORT"
-  local ip
-  # Best-effort LAN/public addresses — helpful on headless Ubuntu servers.
-  for ip in $(hostname -I 2>/dev/null || true); do
-    case "$ip" in
-      127.*|::1|fe80:*) continue ;;
-    esac
-    ok "from network:  http://$ip:$UI_PORT"
-  done
-  info "no browser on the server? from your laptop:  ssh -L $UI_PORT:127.0.0.1:$UI_PORT USER@HOST"
-  info "then open http://127.0.0.1:$UI_PORT  (open firewall / cloud security group for $UI_PORT if using the network URL)"
+  ok "UI: http://127.0.0.1:$UI_PORT  (localhost only; engine on 127.0.0.1:$SD_PORT)"
+  info "remote access: ssh -L $UI_PORT:127.0.0.1:$UI_PORT USER@HOST  then open that URL locally"
 }
 
 cmd_serve() {
@@ -86,8 +75,13 @@ cmd_serve() {
   start_engine
   ok "engine ready ($FI_DEVICE)"
   serve_urls
+  # UI unlocks 2048² when VRAM / unified memory is 24 GB+.
+  local mem_gb=0
+  if [ "${FI_UNIFIED_GB:-0}" -gt 0 ]; then mem_gb=$FI_UNIFIED_GB
+  else mem_gb=$(( FI_VRAM_MB / 1024 )); fi
   FI_SD_URL="http://127.0.0.1:$SD_PORT" FI_OUT="$ROOT/outputs" FI_STEPS="$FI_STEPS" \
-    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-0.0.0.0}" --port "$UI_PORT"
+    FI_MEM_GB="$mem_gb" \
+    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-127.0.0.1}" --port "$UI_PORT"
 }
 
 cmd_bench() {

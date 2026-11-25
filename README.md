@@ -112,7 +112,7 @@ the model stays in memory and each image takes only the sampling time.
 Tips:
 - **Steps:** 8 is the sweet spot. 6 is ~20% faster with a slight softening of skin and fur. 4 loses visible detail.
 - **Prompts:** Z-Image Turbo likes plain, descriptive English: subject, setting, light, style. No negative prompt is needed (CFG is 1.0).
-- **Sizes:** any multiple of 64. 1024×1024, 896×1152 (3:4), 768×1344 (9:16) and 1344×768 (16:9) all work well.
+- **Sizes:** any multiple of 64. 1024×1024, 896×1152 (3:4), 768×1344 (9:16) and 1344×768 (16:9) all work well. On 24 GB+ VRAM or unified memory, the UI also offers **2K** (2048×2048).
 
 ## What didn't help
 

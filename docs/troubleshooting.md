@@ -43,12 +43,11 @@ Expected: CUDA + SageAttention is the fast path; Metal has no SageAttention. On 
 `FI_SD_PORT=7870 FI_UI_PORT=7871 ./fi serve`
 
 **Ubuntu / headless server — `./fi serve` “shows nothing”**
-There is no desktop browser on the server. The UI listens on `0.0.0.0:7861`; open it from your laptop:
+The UI binds to `127.0.0.1:7861` only (not the LAN). From your laptop use an SSH tunnel:
 
-- Network URL printed at startup (`http://<server-ip>:7861`), after opening the port in `ufw` / the cloud security group, or
-- SSH tunnel (no firewall change): `ssh -L 7861:127.0.0.1:7861 user@server` then open `http://127.0.0.1:7861` locally.
+`ssh -L 7861:127.0.0.1:7861 user@server` then open `http://127.0.0.1:7861` locally.
 
-`localhost` on the server is not your laptop. The diffusion engine stays on `127.0.0.1:7860` on purpose; only the UI port needs to be reachable.
+To expose on all interfaces instead: `FI_UI_HOST=0.0.0.0 ./fi serve`.
 
 **Logs**
 `.fi/build.log` (build), `.fi/server.log` (engine), `.fi/last.log` (last single image).
