@@ -204,7 +204,8 @@ cmd_serve() {
     if [ -n "${SD_PID:-}" ] && ! kill -0 "$SD_PID" 2>/dev/null; then
       cp "$FI_HOME/server.log" "$FI_HOME/server.crash.log"
       printf '\n%s✗ engine stopped — last log lines (full: %s)%s\n' "$R" "$FI_HOME/server.crash.log" "$N" >&2
-      tail -25 "$FI_HOME/server.crash.log" >&2
+      # ggml aborts by attaching gdb; the real error is just before gdb's "[New LWP" spam.
+      awk '/^\[New LWP/ { exit } { print }' "$FI_HOME/server.crash.log" | tail -25 >&2
       dmesg 2>/dev/null | grep -iE 'killed process|out of memory|NVRM|Xid' | tail -5 >&2 || true
       info "restarting engine…"
       start_engine
