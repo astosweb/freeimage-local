@@ -45,15 +45,21 @@ Expected: CUDA + SageAttention is the fast path; Metal has no SageAttention. On 
 **Port already in use**
 `FI_SD_PORT=7870 FI_UI_PORT=7871 ./fi serve`
 
-**Ubuntu / headless / cloud GPU — `./fi serve` “shows nothing”**
-There is no desktop browser on the server. The UI listens on **port 7861** (`0.0.0.0` by default so cloud port proxies work). While the model loads you should see `… still loading (Ns)` every couple of seconds.
+**Ubuntu / headless — `./fi serve` “shows nothing”**
+There is no desktop browser on the server. While the model loads you should see `… still loading (Ns)` every few seconds, then `freeimage UI ready`. If the terminal stays blank, check `.fi/server.log`.
 
-Open it from your laptop via:
+**Vast.ai — browser cannot open the app (`172.17.x.x:7861`)**
+That address is the container's private Docker IP. Vast publishes each internal port on a random public port (`PUBLIC_IPADDR` + `VAST_TCP_PORT_<port>`).
 
-- the host’s published URL / port proxy for **7861**, or
-- SSH tunnel: `ssh -L 7861:127.0.0.1:7861 user@server` → http://127.0.0.1:7861
+1. Instance → Edit → Docker create/run options: `-p 7861:7861 -e OPEN_BUTTON_PORT=7861`
+2. Recreate the instance (mappings are set at start).
+3. `./fi serve` again. It prints `http://<public-ip>:<mapped-port>`. The instance **Open** button uses that port too.
 
-Loopback only: `FI_UI_HOST=127.0.0.1 ./fi serve`. If the terminal stays blank for minutes with no heartbeat, check `.fi/server.log`.
+SSH tunnel without opening 7861 (use the SSH port from the instance card, often not 22):
+
+`ssh -p $VAST_TCP_PORT_22 root@$PUBLIC_IPADDR -L 7861:127.0.0.1:7861` then open http://127.0.0.1:7861
+
+Loopback only: `FI_UI_HOST=127.0.0.1 ./fi serve`.
 
 **Logs**
 `.fi/build.log` (build), `.fi/server.log` (engine), `.fi/last.log` (last single image).
