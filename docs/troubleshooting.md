@@ -55,6 +55,8 @@ That address is the container's private Docker IP. Vast publishes each internal 
 2. Recreate the instance (mappings are set at start).
 3. `./fi serve` again. It prints `http://<public-ip>:<mapped-port>`. The instance **Open** button uses that port too.
 
+If 7861 was never opened, `./fi serve` binds the UI to another already-published internal port (skipping SSH, Jupyter, and the instance portal) and prints `http://$PUBLIC_IPADDR:$VAST_TCP_PORT_…`. Open that URL. `Address already in use` means an old UI is still running: `pkill -f ui/serve.py` and start again.
+
 SSH tunnel without opening 7861 (use the SSH port from the instance card, often not 22):
 
 `ssh -p $VAST_TCP_PORT_22 root@$PUBLIC_IPADDR -L 7861:127.0.0.1:7861` then open http://127.0.0.1:7861

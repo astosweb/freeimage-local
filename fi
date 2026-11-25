@@ -107,6 +107,29 @@ cmd_generate() {
   ok "$out  ($((SECONDS - t0)) s incl. model load — use 'fi serve' to keep it loaded)"
 }
 
+port_listening() {
+  (echo >/dev/tcp/127.0.0.1/"$1") >/dev/null 2>&1
+}
+
+# Vast maps only the ports requested at instance start. 7861 is often closed
+# while 10100/10200/etc. are already public — use one of those if it is free.
+vast_bind_ui_port() {
+  [ -n "${PUBLIC_IPADDR:-}${VAST_CONTAINERLABEL:-}" ] || return 0
+  local ext line in_port
+  ext="$(printenv "VAST_TCP_PORT_${UI_PORT}" 2>/dev/null || true)"
+  if [ -n "$ext" ] && ! port_listening "$UI_PORT"; then return 0; fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    in_port="${line#VAST_TCP_PORT_}"; in_port="${in_port%%=*}"
+    # 22 ssh, 1111 instance portal, 8080 jupyter, 6006 tensorboard, 8384 sync.
+    case "$in_port" in 22|1111|8080|6006|8384) continue ;; esac
+    port_listening "$in_port" && continue
+    [ "$in_port" = "$UI_PORT" ] || info "using Vast published port $in_port (internal) instead of $UI_PORT"
+    UI_PORT=$in_port
+    return 0
+  done < <(env | awk -F= '/^VAST_TCP_PORT_[0-9]+=/ { print }' | sort || true)
+}
+
 serve_urls() {
   local host="${FI_UI_HOST:-0.0.0.0}"
   ok "UI inside this machine: http://127.0.0.1:$UI_PORT"
@@ -157,6 +180,7 @@ cmd_serve() {
   require_install
   start_engine
   ok "engine ready ($FI_DEVICE)"
+  vast_bind_ui_port
   serve_urls
   # UI unlocks 2048² when VRAM / unified memory is 24 GB+.
   local mem_gb=0
