@@ -12,6 +12,9 @@ Update the CUDA toolkit. The driver alone isn't enough.
 Your gcc is newer than your CUDA release supports. Install an older one (for example `sudo apt install g++-13`).
 The installer picks the newest `g++-14/13/12` it finds automatically.
 
+**`cp: … Text file busy` while installing**
+`sd-server` was still running (`./fi serve`). Current installers replace binaries via rename so this should not fail; restart `./fi serve` afterward so the new build is loaded.
+
 **A download stopped halfway**
 Run `./install.sh --models` again. Downloads resume where they left off and are checked against SHA-256.
 

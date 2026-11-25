@@ -104,9 +104,21 @@ build_engine() {
   cmake --build "$src/build" --config Release -j "$jobs" --target sd-cli sd-server 2>&1 | tee -a "$FI_HOME/build.log" \
     || { tail -30 "$FI_HOME/build.log"; die "build failed. Full log: $FI_HOME/build.log"; }
   mkdir -p "$FI_HOME/bin"
-  cp "$src/build/bin/sd-cli" "$src/build/bin/sd-server" "$FI_HOME/bin/"
+  # cp onto a running binary fails with "Text file busy"; write aside then mv (new inode).
+  local bin running=0
+  for bin in sd-cli sd-server; do
+    cp "$src/build/bin/$bin" "$FI_HOME/bin/$bin.new"
+    mv -f "$FI_HOME/bin/$bin.new" "$FI_HOME/bin/$bin"
+    chmod +x "$FI_HOME/bin/$bin"
+  done
+  if command -v pgrep >/dev/null 2>&1 && pgrep -f "$FI_HOME/bin/sd-server" >/dev/null 2>&1; then
+    running=1
+  fi
   printf '%s\n' "$FI_PLATFORM" >"$FI_HOME/platform"
   ok "engine ready: $FI_HOME/bin"
+  if [ "$running" = 1 ]; then
+    info "sd-server is still running the old binary — restart ./fi serve to use this build"
+  fi
 }
 
 download_models() {
