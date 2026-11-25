@@ -89,10 +89,19 @@ build_engine() {
   git -C "$src" submodule update --init --recursive --quiet
   info "at $(git -C "$src" rev-parse --short HEAD)"
 
-  step "Building (a few minutes; CUDA builds take longer)"
-  cmake -S "$src" -B "$src/build" "${gen[@]}" "${flags[@]}" >"$FI_HOME/build.log" 2>&1 \
+  local jobs; jobs="$(cpu_count)"
+  step "Configuring cmake"
+  info "log: $FI_HOME/build.log"
+  cmake -S "$src" -B "$src/build" "${gen[@]}" "${flags[@]}" 2>&1 | tee "$FI_HOME/build.log" \
     || { tail -30 "$FI_HOME/build.log"; die "cmake configure failed. Full log: $FI_HOME/build.log"; }
-  cmake --build "$src/build" --config Release -j "$(cpu_count)" --target sd-cli sd-server >>"$FI_HOME/build.log" 2>&1 \
+
+  if [ "$FI_PLATFORM" = cuda ]; then
+    step "Building engine ($jobs jobs — CUDA often 15–40 min; live progress below)"
+  else
+    step "Building engine ($jobs jobs)"
+  fi
+  # Stream compile lines to the terminal and keep the full log for failures.
+  cmake --build "$src/build" --config Release -j "$jobs" --target sd-cli sd-server 2>&1 | tee -a "$FI_HOME/build.log" \
     || { tail -30 "$FI_HOME/build.log"; die "build failed. Full log: $FI_HOME/build.log"; }
   mkdir -p "$FI_HOME/bin"
   cp "$src/build/bin/sd-cli" "$src/build/bin/sd-server" "$FI_HOME/bin/"
