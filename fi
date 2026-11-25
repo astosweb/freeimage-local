@@ -124,6 +124,8 @@ vast_bind_ui_port() {
     in_port="${line#VAST_TCP_PORT_}"; in_port="${in_port%%=*}"
     # 22 ssh, 1111 instance portal, 8080 jupyter, 6006 tensorboard, 8384 sync.
     case "$in_port" in 22|1111|8080|6006|8384) continue ;; esac
+    # Vast also lists non-bindable pseudo ports (e.g. 72299).
+    [ "$in_port" -le 65535 ] || continue
     port_listening "$in_port" && continue
     [ "$in_port" = "$UI_PORT" ] || info "using Vast published port $in_port (internal) instead of $UI_PORT"
     UI_PORT=$in_port
