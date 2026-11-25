@@ -76,9 +76,17 @@ A stand that lifts the back of the laptop helps more than any flag.
 
 ## Ideas not tried yet
 
-- The int8 file (6.2 GB) doesn't fully fit in 6 GB and streams in pieces; GPU use sits around 85%. A version that fits entirely could gain ~15%.
+- The int8 file (6.2 GB) doesn't fully fit in 6 GB and streams in pieces; GPU use sits around 85%. A version that fits entirely could gain ~15%. On 16 GB+ cards the scripts already pass `--eager-load` so weights stay resident.
 - Few-step distill LoRAs (2–4 steps) and SVDQuant int4.
 - Generating at 768² and upscaling.
+
+## High-VRAM / Turing notes
+
+On Quadro RTX / RTX 20-series (`sm_75`) and other pre-Ampere CUDA GPUs:
+
+- Build with `CMAKE_CUDA_ARCHITECTURES=75` (installer sets this from `nvidia-smi`).
+- Do **not** use `--sage-attn` (needs `sm_80+`); use forced diffusion flash attention.
+- With ≥16 GB VRAM, skip `--offload-to-cpu` and use `--eager-load` so int8 DiT + Q8 text encoder stay on GPU.
 
 ## Apple Silicon notes
 

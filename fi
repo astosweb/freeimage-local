@@ -121,7 +121,15 @@ cmd_doctor() {
   engine_args
   echo "platform : $FI_PLATFORM"
   echo "device   : $FI_DEVICE"
-  [ "$FI_PLATFORM" = cuda ] && echo "arch     : sm_$FI_CUDA_ARCH"
+  if [ "$FI_PLATFORM" = cuda ]; then
+    echo "arch     : sm_$FI_CUDA_ARCH"
+    echo "vram     : $(( FI_VRAM_MB / 1024 )) GB"
+    if [ "${FI_CUDA_ARCH:-0}" -ge 80 ]; then
+      echo "attn     : SageAttention (--sage-attn)"
+    else
+      echo "attn     : flash attention (Turing / pre-Ampere; SageAttention needs sm_80+)"
+    fi
+  fi
   [ "$FI_PLATFORM" = metal ] && [ "${FI_UNIFIED_GB:-0}" -gt 0 ] && echo "unified  : ${FI_UNIFIED_GB} GB"
   echo "home     : $FI_HOME"
   echo "engine   : $([ -x "$FI_HOME/bin/sd-cli" ] && echo built || echo 'not built (./install.sh)')"

@@ -21,10 +21,17 @@ Pass a token: `HF_TOKEN=hf_xxx ./install.sh --models`. Create one at https://hug
 **Out of memory on NVIDIA**
 Force weight offloading: `FI_OFFLOAD=1 ./fi serve`. It's already on automatically for cards under 12 GB.
 
+**Engine fails to start on Turing / Quadro RTX (`sm_75`) with SageAttention**
+SageAttention needs Ampere or newer (`sm_80+`). On Turing the scripts use `--flash-attn diffusion=on` instead. Run `./fi doctor` — `attn` should say flash attention, not SageAttention. Rebuild is not required for this flag change; restart `./fi serve`.
+
+**CUDA 13 build fails targeting an old GPU**
+CUDA 13 only offline-compiles Turing and newer (`sm_75+`). Maxwell / Pascal / Volta need CUDA 12.x.
+
 **It's slower than the numbers in the README**
 - Make sure you're timing `fi serve` or `fi bench`, not single `fi "…"` runs, which include loading the model.
 - Laptop? Check temperature with `nvidia-smi`. Around 87 °C the GPU throttles itself.
 - Close other apps that use the GPU (browsers with hardware acceleration, games).
+- Turing cards won't match the RTX 3060 + SageAttention numbers; flash attention is the correct path.
 
 **Apple Silicon is much slower than a 6 GB NVIDIA card**
 Expected: CUDA + SageAttention is the fast path; Metal has no SageAttention. On a 16 GB Mac the old default also spilled the text encoder to disk and graph-cut every step (~25 s/it). `./fi doctor` should show Metal flags like `--mmap`, `--backend diffusion=MTL0,te=cpu,…`, and `Qwen3-4B-Q4_K_M.gguf`. If you still have only the Q8 encoder, run `./install.sh --models`. Do **not** set `FI_OFFLOAD=1` on Mac — unified memory makes CPU offload slower and hungrier.

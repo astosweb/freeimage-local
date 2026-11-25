@@ -75,10 +75,22 @@ engine_args() {
     --cfg-scale 1.0
   )
   if [ "$FI_PLATFORM" = cuda ]; then
-    FI_ARGS+=(--sage-attn)
+    # SageAttention needs Ampere+ (sm_80). Turing (sm_75: Quadro RTX / RTX 20xx)
+    # fails context creation with --sage-attn; force flash attention instead.
+    if [ "${FI_CUDA_ARCH:-0}" -ge 80 ]; then
+      FI_ARGS+=(--sage-attn)
+    else
+      FI_ARGS+=(--flash-attn "diffusion=on")
+    fi
     # int8 weights (6.2 GB) + text encoder (4.3 GB) only fit together on 12 GB+ cards.
     # Below that, weights live in RAM and stream into VRAM as needed.
-    if [ "$FI_VRAM_MB" -lt 12000 ] || [ "${FI_OFFLOAD:-0}" = 1 ]; then FI_ARGS+=(--offload-to-cpu); fi
+    if [ "$FI_VRAM_MB" -lt 12000 ] || [ "${FI_OFFLOAD:-0}" = 1 ]; then
+      FI_ARGS+=(--offload-to-cpu)
+    elif [ "$FI_VRAM_MB" -ge 16000 ]; then
+      # 16 GB+ (e.g. Quadro RTX 8000 48 GB): keep the full working set resident.
+      # Avoids lazy weight paging; model + TE fit easily with headroom for 2048².
+      FI_ARGS+=(--eager-load)
+    fi
   elif [ "$FI_PLATFORM" = metal ]; then
     # Unified memory: never --offload-to-cpu (duplicates residency, can OOM).
     # mmap lets Metal map weights through shared buffers instead of copying.

@@ -61,16 +61,21 @@ build_engine() {
       if [ "$FI_CUDA_ARCH" -ge 120 ] && ! version_ge "$cuda_ver" 12.8; then
         die "RTX 50-series (sm_120) needs CUDA 12.8 or newer; you have $cuda_ver."
       fi
+      # CUDA 13 dropped offline compile for pre-Turing (sm < 75).
+      if version_ge "$cuda_ver" 13.0 && [ "$FI_CUDA_ARCH" -lt 75 ]; then
+        die "CUDA $cuda_ver cannot target sm_$FI_CUDA_ARCH (needs sm_75+ / Turing or newer). Use CUDA 12.x or a newer GPU."
+      fi
       flags+=(-DSD_CUDA=ON "-DCMAKE_CUDA_ARCHITECTURES=$FI_CUDA_ARCH")
       # Older CUDA releases reject the newest gcc. Use the newest supported g++ if one is installed.
-      for v in 14 13 12; do
+      # CUDA 13 commonly pairs with gcc 15; try that first, then fall back.
+      for v in 15 14 13 12; do
         if command -v "g++-$v" >/dev/null 2>&1; then
           flags+=("-DCMAKE_CUDA_HOST_COMPILER=$(command -v "g++-$v")"); break
         fi
       done
       ;;
     *)
-      die "No supported GPU found. freeimage-local needs an Apple Silicon Mac or an NVIDIA RTX GPU (Linux / WSL2)."
+      die "No supported GPU found. freeimage-local needs an Apple Silicon Mac or an NVIDIA GPU with CUDA (Linux / WSL2)."
       ;;
   esac
 
