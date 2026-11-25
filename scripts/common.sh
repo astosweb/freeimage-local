@@ -16,6 +16,21 @@ sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d
 human() { awk -v b="$1" 'BEGIN { split("B KB MB GB", u); i = 1; while (b >= 1024 && i < 4) { b /= 1024; i++ } printf "%.1f %s", b, u[i] }'; }
 version_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
 
+# Digits-only; empty/non-numeric → 0. Safe for $(( )) and -ge/-lt tests.
+fi_uint() { case "$1" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$1" ;; esac; }
+
+# System RAM in MiB from /proc (Linux) or sysctl (macOS). 0 if unknown.
+system_mem_mb() {
+  local kb=0
+  if [ -r /proc/meminfo ]; then
+    kb="$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || echo 0)"
+  elif command -v sysctl >/dev/null 2>&1; then
+    local bytes; bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
+    kb=$(( bytes / 1024 ))
+  fi
+  fi_uint "$(( $(fi_uint "$kb") / 1024 ))"
+}
+
 # Sets FI_PLATFORM (metal | cuda | none), FI_DEVICE, FI_CUDA_ARCH, FI_VRAM_MB, FI_UNIFIED_GB.
 detect_platform() {
   FI_PLATFORM=none; FI_DEVICE="no supported GPU"; FI_CUDA_ARCH=0; FI_VRAM_MB=0; FI_UNIFIED_GB=0
@@ -25,8 +40,8 @@ detect_platform() {
     local brand mem_bytes mem_label
     brand="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'Apple Silicon')"
     mem_bytes="$(sysctl -n hw.memsize 2>/dev/null || true)"
-    if [ -n "$mem_bytes" ]; then
-      FI_UNIFIED_GB=$(( mem_bytes / 1073741824 ))
+    if [ -n "$mem_bytes" ] && [ "$(fi_uint "$mem_bytes")" != 0 ]; then
+      FI_UNIFIED_GB=$(( $(fi_uint "$mem_bytes") / 1073741824 ))
       mem_label="$FI_UNIFIED_GB GB unified memory"
     else
       mem_label="unified memory"
@@ -34,11 +49,27 @@ detect_platform() {
     FI_DEVICE="$brand, $mem_label"
   elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
     FI_PLATFORM=cuda
-    local q; q="$(nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader,nounits | head -1)"
-    FI_DEVICE="$(echo "$q" | cut -d, -f1 | sed 's/^ *//')"
-    FI_CUDA_ARCH="$(echo "$q" | cut -d, -f2 | tr -d ' .')"
-    FI_VRAM_MB="$(echo "$q" | cut -d, -f3 | tr -d ' ')"
-    FI_DEVICE="$FI_DEVICE, $(( FI_VRAM_MB / 1024 )) GB VRAM"
+    local q name cap_raw mem_raw
+    # GB10 / DGX Spark (unified memory): memory.total is "[N/A]" — never feed that to $(( )).
+    q="$(nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)"
+    name="$(printf '%s' "$q" | cut -d, -f1 | sed 's/^ *//;s/ *$//')"
+    cap_raw="$(printf '%s' "$q" | cut -d, -f2 | tr -d ' .')"
+    mem_raw="$(printf '%s' "$q" | cut -d, -f3 | tr -d ' ')"
+    FI_CUDA_ARCH="$(fi_uint "$(printf '%s' "$cap_raw" | tr -cd '0-9')")"
+    if [ "$(fi_uint "$mem_raw")" != 0 ] && [ "$mem_raw" = "$(fi_uint "$mem_raw")" ]; then
+      FI_VRAM_MB="$(fi_uint "$mem_raw")"
+      FI_DEVICE="$name, $(( FI_VRAM_MB / 1024 )) GB VRAM"
+    else
+      # Unified memory GPU (NVIDIA GB10 / DGX Spark, etc.): budget = system RAM.
+      FI_VRAM_MB="$(system_mem_mb)"
+      FI_UNIFIED_GB=$(( FI_VRAM_MB / 1024 ))
+      if [ "$FI_UNIFIED_GB" -gt 0 ]; then
+        FI_DEVICE="$name, ${FI_UNIFIED_GB} GB unified memory"
+      else
+        FI_DEVICE="$name, unified memory"
+      fi
+    fi
+    [ "$FI_CUDA_ARCH" -gt 0 ] || die "nvidia-smi did not report a CUDA compute capability for '$name'."
   fi
 }
 
@@ -77,18 +108,20 @@ engine_args() {
   if [ "$FI_PLATFORM" = cuda ]; then
     # SageAttention needs Ampere+ (sm_80). Turing (sm_75: Quadro RTX / RTX 20xx)
     # fails context creation with --sage-attn; force flash attention instead.
+    # Blackwell GB10 is sm_121 — SageAttention is fine.
     if [ "${FI_CUDA_ARCH:-0}" -ge 80 ]; then
       FI_ARGS+=(--sage-attn)
     else
       FI_ARGS+=(--flash-attn "diffusion=on")
     fi
-    # int8 weights (6.2 GB) + text encoder (4.3 GB) only fit together on 12 GB+ cards.
-    # Below that, weights live in RAM and stream into VRAM as needed.
-    if [ "$FI_VRAM_MB" -lt 12000 ] || [ "${FI_OFFLOAD:-0}" = 1 ]; then
+    if [ "${FI_UNIFIED_GB:-0}" -gt 0 ]; then
+      # CUDA UMA (GB10 / DGX Spark): same trap as Metal — never --offload-to-cpu.
+      FI_ARGS+=(--eager-load)
+    elif [ "$FI_VRAM_MB" -lt 12000 ] || [ "${FI_OFFLOAD:-0}" = 1 ]; then
+      # int8 (6.2 GB) + TE (4.3 GB) only fit together on 12 GB+ discrete cards.
       FI_ARGS+=(--offload-to-cpu)
     elif [ "$FI_VRAM_MB" -ge 16000 ]; then
-      # 16 GB+ (e.g. Quadro RTX 8000 48 GB): keep the full working set resident.
-      # Avoids lazy weight paging; model + TE fit easily with headroom for 2048².
+      # 16 GB+ discrete (e.g. Quadro RTX 8000): keep the full working set resident.
       FI_ARGS+=(--eager-load)
     fi
   elif [ "$FI_PLATFORM" = metal ]; then

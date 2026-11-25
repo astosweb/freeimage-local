@@ -123,7 +123,11 @@ cmd_doctor() {
   echo "device   : $FI_DEVICE"
   if [ "$FI_PLATFORM" = cuda ]; then
     echo "arch     : sm_$FI_CUDA_ARCH"
-    echo "vram     : $(( FI_VRAM_MB / 1024 )) GB"
+    if [ "${FI_UNIFIED_GB:-0}" -gt 0 ]; then
+      echo "memory   : ${FI_UNIFIED_GB} GB unified (nvidia-smi VRAM N/A)"
+    else
+      echo "vram     : $(( FI_VRAM_MB / 1024 )) GB"
+    fi
     if [ "${FI_CUDA_ARCH:-0}" -ge 80 ]; then
       echo "attn     : SageAttention (--sage-attn)"
     else

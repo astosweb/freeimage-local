@@ -24,6 +24,9 @@ Force weight offloading: `FI_OFFLOAD=1 ./fi serve`. It's already on automaticall
 **Engine fails to start on Turing / Quadro RTX (`sm_75`) with SageAttention**
 SageAttention needs Ampere or newer (`sm_80+`). On Turing the scripts use `--flash-attn diffusion=on` instead. Run `./fi doctor` — `attn` should say flash attention, not SageAttention. Rebuild is not required for this flag change; restart `./fi serve`.
 
+**`[N/A]: syntax error` / install aborts on NVIDIA GB10 (DGX Spark)**
+GB10 has unified memory, so `nvidia-smi … memory.total` is `[N/A]`. Current scripts fall back to `/proc/meminfo` and treat it as unified CUDA. Update the repo and re-run `./install.sh`. `./fi doctor` should show `memory: … GB unified` and `arch: sm_121`.
+
 **CUDA 13 build fails targeting an old GPU**
 CUDA 13 only offline-compiles Turing and newer (`sm_75+`). Maxwell / Pascal / Volta need CUDA 12.x.
 

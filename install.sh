@@ -59,7 +59,7 @@ build_engine() {
       local cuda_ver; cuda_ver="$(nvcc --version | sed -n 's/.*release \([0-9]*\.[0-9]*\).*/\1/p')"
       info "CUDA toolkit: $cuda_ver, GPU architecture: sm_$FI_CUDA_ARCH"
       if [ "$FI_CUDA_ARCH" -ge 120 ] && ! version_ge "$cuda_ver" 12.8; then
-        die "RTX 50-series (sm_120) needs CUDA 12.8 or newer; you have $cuda_ver."
+        die "Blackwell (sm_$FI_CUDA_ARCH, e.g. RTX 50-series / GB10) needs CUDA 12.8 or newer; you have $cuda_ver."
       fi
       # CUDA 13 dropped offline compile for pre-Turing (sm < 75).
       if version_ge "$cuda_ver" 13.0 && [ "$FI_CUDA_ARCH" -lt 75 ]; then
