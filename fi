@@ -115,7 +115,9 @@ serve_urls() {
   # Vast.ai: 172.17.x is the container IP and is not reachable from a browser.
   # Each open internal port is mapped to a random public port (VAST_TCP_PORT_<internal>).
   if [ -n "${PUBLIC_IPADDR:-}${VAST_CONTAINERLABEL:-}" ]; then
-    local ext_var="VAST_TCP_PORT_${UI_PORT}" ext="${!ext_var:-}"
+    # ${!name:-} is not valid indirect expansion under set -u ("invalid indirect expansion").
+    local ext
+    ext="$(printenv "VAST_TCP_PORT_${UI_PORT}" 2>/dev/null || true)"
     if [ -n "${PUBLIC_IPADDR:-}" ] && [ -n "$ext" ]; then
       ok "open in your browser: http://${PUBLIC_IPADDR}:$ext"
       info "that public port maps to internal $UI_PORT (Vast.ai)"
