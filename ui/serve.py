@@ -55,7 +55,7 @@ def generate(body: dict) -> dict:
     (OUT / (name + ".json")).write_text(json.dumps(
         {"prompt": prompt, "width": w, "height": h, "steps": steps, "seed": seed, "seconds": round(secs, 1)}))
     return {"url": f"/outputs/{name}", "name": name, "seed": seed, "seconds": round(secs, 1),
-            "width": w, "height": h, "prompt": prompt}
+            "width": w, "height": h, "steps": steps, "prompt": prompt}
 
 
 def history(limit: int = 60) -> list[dict]:
@@ -71,6 +71,9 @@ def history(limit: int = 60) -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Keep-alive: the history grid otherwise opens one TCP connection (through the SSH/Vast proxy) per image.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *a):  # quiet
         pass
 
@@ -78,8 +81,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("content-type", ctype)
         self.send_header("content-length", str(len(body)))
-        self.send_header("cache-control", "no-store")
-        for k, v in (extra or {}).items():
+        headers = {"cache-control": "no-store", **(extra or {})}
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
@@ -103,15 +106,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/history":
             return self.json(200, history())
         if path.startswith("/outputs/") and NAME.match(path[9:]) and (OUT / path[9:]).is_file():
-            extra = {"content-disposition": f'attachment; filename="{path[9:]}"'} if "dl=1" in self.path else None
+            # Output names embed time + seed and are never rewritten, so the browser can keep them forever.
+            extra = {"cache-control": "public, max-age=31536000, immutable"}
+            if "dl=1" in self.path:
+                extra["content-disposition"] = f'attachment; filename="{path[9:]}"'
             return self.send(200, (OUT / path[9:]).read_bytes(), "image/png", extra)
         self.send(404, b"not found", "text/plain")
 
     def do_POST(self):
+        raw = self.rfile.read(int(self.headers.get("content-length", 0) or 0))
         if self.path != "/api/generate":
             return self.send(404, b"not found", "text/plain")
         try:
-            body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0)) or 0) or b"{}")
+            body = json.loads(raw or b"{}")
             self.json(200, generate(body))
         except ValueError as e:
             self.json(400, {"error": str(e)})

@@ -180,6 +180,10 @@ cmd_serve() {
   require_install
   start_engine
   ok "engine ready ($FI_DEVICE)"
+  if [ "$FI_PLATFORM" = cuda ]; then
+    # First request pays lazy CUDA kernel loading + graph capture; pay it before the user does.
+    (post_txt2img "warm up" 1024 1024 1 >/dev/null 2>&1 || true) &
+  fi
   vast_bind_ui_port
   serve_urls
   # UI unlocks 2048² when VRAM / unified memory is 24 GB+.
@@ -211,6 +215,9 @@ cmd_bench() {
     total="$(awk -v a="$total" -v b="$t" 'BEGIN { print a + b }')"
   done
   ok "$(awk -v t="$total" -v n=${#prompts[@]} 'BEGIN { printf "%.1f s per image on average", t / n }')"
+  info "last image breakdown (text encode / sampling / VAE decode):"
+  grep -aoE '(get_learned_condition|sampling|decode_first_stage) completed, taking [0-9.]+s' "$FI_HOME/server.log" \
+    | tail -3 | sed 's/^/    /' || true
 }
 
 # prompt width height steps → prints seconds

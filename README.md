@@ -61,7 +61,7 @@ Why it works:
 | NVIDIA RTX 30-series, Linux | ✅ **Tested** | RTX 3060 Laptop 6 GB, 16 GB RAM, CUDA 12.4. Runs freeimage.dev 24/7. |
 | NVIDIA RTX 40-series, Linux | Should work | Same code path, architecture detected automatically. |
 | NVIDIA RTX 50-series (5060, 5070…), Linux | Should work | Needs CUDA 12.8+ for `sm_120`. The installer checks this. |
-| NVIDIA GB10 (DGX Spark), Linux | Tuned | `sm_121`, ~120 GB unified memory. `nvidia-smi` reports VRAM as N/A — installer uses system RAM, enables SageAttention + `--eager-load`, never `--offload-to-cpu`. Needs CUDA 12.8+. |
+| NVIDIA GB10 (DGX Spark), Linux | Tuned | `sm_121`, ~120 GB unified memory. `nvidia-smi` reports VRAM as N/A — installer uses system RAM, enables SageAttention + `--eager-load`, never `--offload-to-cpu`. Needs CUDA 12.9+ (DGX OS ships 13.x). Stays on int8: CUTLASS int8 tensor-core GEMMs run at ~2× the BF16 rate on Blackwell, and the Comfy NVFP4 file does not load in stable-diffusion.cpp. |
 | NVIDIA Turing (RTX 20xx, Quadro RTX), Linux | Tuned | `sm_75` builds fine on CUDA 12/13. SageAttention needs Ampere+ (`sm_80`), so the engine uses flash attention + `--eager-load` on 16 GB+ VRAM (no CPU offload). |
 | Windows + NVIDIA | Should work in WSL2 | Use the Linux steps inside WSL2 with the NVIDIA CUDA-on-WSL driver. |
 | Apple Silicon Mac | ✅ Tuned | Metal build. No SageAttention. On ≤18 GB unified memory, installs a Q4 text encoder and pins DiT on GPU (TE on CPU) so sampling does not thrash. Never use `--offload-to-cpu` on Mac. |

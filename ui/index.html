@@ -130,13 +130,16 @@
   };
 
   // Rough wall-time guess so the bar moves; caps at 95% until the image lands.
-  const estimateSeconds = (w, h, steps) => {
-    const megapixels = (w * h) / (1024 * 1024);
-    return Math.max(6, megapixels * (2.2 * steps + 3));
+  // Base curve is an RTX 3060; speed rescales it from the last measured image on this machine.
+  const rtx3060Seconds = (w, h, steps) => (w * h) / (1024 * 1024) * (2.2 * steps + 3);
+  let speed = 1;
+  const learnSpeed = (r) => {
+    if (r && r.seconds && r.width && r.height && r.steps) speed = r.seconds / rtx3060Seconds(r.width, r.height, r.steps);
   };
 
   const history = async () => {
     const items = await (await fetch("/api/history")).json();
+    learnSpeed(items[0]);
     $("#hh").hidden = !items.length;
     $("#grid").replaceChildren(...items.map((it) => {
       const i = new Image(); i.src = it.url; i.loading = "lazy"; i.alt = it.prompt || ""; i.title = it.prompt || "";
@@ -150,7 +153,7 @@
     const prompt = $("#prompt").value.trim(); if (!prompt) return $("#prompt").focus();
     const [width, height] = val($("#shape")).split("x").map(Number);
     const steps = +val($("#steps"));
-    const expect = estimateSeconds(width, height, steps);
+    const expect = Math.max(2, speed * rtx3060Seconds(width, height, steps));
     $("#go").disabled = true; $("#err").hidden = true;
     $("#stage").hidden = false;
     $("#frame").classList.add("busy");
