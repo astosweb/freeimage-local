@@ -3,7 +3,7 @@
 #
 #   fi "a red fox in fresh snow"          make one image → outputs/
 #   fi "..." --size 768x1344 --seed 7     portrait, fixed seed
-#   fi serve                              web UI on http://127.0.0.1:7861
+#   fi serve                              web UI on :7861 (engine stays on 127.0.0.1)
 #   fi bench                              measure seconds per image on this machine
 #   fi doctor                             show what was detected and which flags are used
 #
@@ -25,18 +25,25 @@ usage() { sed -n '2,15p' "$ROOT/fi" | sed 's/^# \{0,1\}//'; }
 
 start_engine() {
   engine_args
-  if curl -sf "http://127.0.0.1:$SD_PORT/sdapi/v1/sd-models" >/dev/null 2>&1; then return; fi
-  info "loading the model (first start takes a moment)…"
+  if curl -sf "http://127.0.0.1:$SD_PORT/sdapi/v1/sd-models" >/dev/null 2>&1; then
+    ok "engine already running on 127.0.0.1:$SD_PORT"
+    return
+  fi
+  info "loading the model (first start can take 1–3 min)…"
+  info "log: $FI_HOME/server.log"
   "$FI_HOME/bin/sd-server" --listen-ip 127.0.0.1 --listen-port "$SD_PORT" "${FI_ARGS[@]}" --steps "$FI_STEPS" \
     >"$FI_HOME/server.log" 2>&1 &
   SD_PID=$!
   trap 'kill $SD_PID 2>/dev/null || true' EXIT INT TERM
   local i=0
   until curl -sf "http://127.0.0.1:$SD_PORT/sdapi/v1/sd-models" >/dev/null 2>&1; do
-    kill -0 "$SD_PID" 2>/dev/null || { tail -20 "$FI_HOME/server.log"; die "engine stopped. Log: $FI_HOME/server.log"; }
-    i=$((i + 1)); [ "$i" -gt 600 ] && die "engine did not start in 5 minutes. Log: $FI_HOME/server.log"
+    kill -0 "$SD_PID" 2>/dev/null || { echo; tail -20 "$FI_HOME/server.log"; die "engine stopped. Log: $FI_HOME/server.log"; }
+    i=$((i + 1)); [ "$i" -gt 600 ] && { echo; die "engine did not start in 5 minutes. Log: $FI_HOME/server.log"; }
+    # Heartbeat so headless / nohup sessions are not a blank screen.
+    if [ $((i % 4)) -eq 0 ]; then printf '  … still loading (%ss)\n' "$((i / 2))" >&2; fi
     sleep 0.5
   done
+  echo >&2
 }
 
 cmd_generate() {
@@ -66,8 +73,21 @@ cmd_generate() {
 }
 
 serve_urls() {
-  ok "UI: http://127.0.0.1:$UI_PORT  (localhost only; engine on 127.0.0.1:$SD_PORT)"
-  info "remote access: ssh -L $UI_PORT:127.0.0.1:$UI_PORT USER@HOST  then open that URL locally"
+  local host="${FI_UI_HOST:-0.0.0.0}"
+  # Cloud GPU boxes need 0.0.0.0 so the provider's port proxy can reach the UI.
+  # Engine stays on loopback either way.
+  ok "UI listening on http://127.0.0.1:$UI_PORT"
+  if [ "$host" = "0.0.0.0" ] || [ "$host" = "::" ]; then
+    local ip
+    for ip in $(hostname -I 2>/dev/null || true); do
+      case "$ip" in 127.*|::1|fe80:*) continue ;; esac
+      ok "from network / cloud proxy:  http://$ip:$UI_PORT"
+    done
+    info "no desktop browser here? open the host's :$UI_PORT proxy, or: ssh -L $UI_PORT:127.0.0.1:$UI_PORT USER@HOST"
+  else
+    info "bound to $host only — remote browsers need SSH tunnel or FI_UI_HOST=0.0.0.0"
+  fi
+  info "engine: 127.0.0.1:$SD_PORT"
 }
 
 cmd_serve() {
@@ -79,9 +99,11 @@ cmd_serve() {
   local mem_gb=0
   if [ "${FI_UNIFIED_GB:-0}" -gt 0 ]; then mem_gb=$FI_UNIFIED_GB
   else mem_gb=$(( FI_VRAM_MB / 1024 )); fi
+  # Default 0.0.0.0 so headless / cloud port proxies can reach :7861.
+  # Restrict with FI_UI_HOST=127.0.0.1 if you only want loopback.
   FI_SD_URL="http://127.0.0.1:$SD_PORT" FI_OUT="$ROOT/outputs" FI_STEPS="$FI_STEPS" \
     FI_MEM_GB="$mem_gb" \
-    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-127.0.0.1}" --port "$UI_PORT"
+    python3 "$ROOT/ui/serve.py" --host "${FI_UI_HOST:-0.0.0.0}" --port "$UI_PORT"
 }
 
 cmd_bench() {

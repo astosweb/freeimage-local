@@ -45,12 +45,15 @@ Expected: CUDA + SageAttention is the fast path; Metal has no SageAttention. On 
 **Port already in use**
 `FI_SD_PORT=7870 FI_UI_PORT=7871 ./fi serve`
 
-**Ubuntu / headless server — `./fi serve` “shows nothing”**
-The UI binds to `127.0.0.1:7861` only (not the LAN). From your laptop use an SSH tunnel:
+**Ubuntu / headless / cloud GPU — `./fi serve` “shows nothing”**
+There is no desktop browser on the server. The UI listens on **port 7861** (`0.0.0.0` by default so cloud port proxies work). While the model loads you should see `… still loading (Ns)` every couple of seconds.
 
-`ssh -L 7861:127.0.0.1:7861 user@server` then open `http://127.0.0.1:7861` locally.
+Open it from your laptop via:
 
-To expose on all interfaces instead: `FI_UI_HOST=0.0.0.0 ./fi serve`.
+- the host’s published URL / port proxy for **7861**, or
+- SSH tunnel: `ssh -L 7861:127.0.0.1:7861 user@server` → http://127.0.0.1:7861
+
+Loopback only: `FI_UI_HOST=127.0.0.1 ./fi serve`. If the terminal stays blank for minutes with no heartbeat, check `.fi/server.log`.
 
 **Logs**
 `.fi/build.log` (build), `.fi/server.log` (engine), `.fi/last.log` (last single image).

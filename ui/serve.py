@@ -122,11 +122,11 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7861)
-    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--host", default="0.0.0.0")
     a = ap.parse_args()
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     # Flush so headless / nohup / systemd journals show we're up.
-    print(f"freeimage UI ready on http://{a.host}:{a.port}", flush=True)
+    print(f"freeimage UI ready on http://127.0.0.1:{a.port} (bound {a.host})", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
